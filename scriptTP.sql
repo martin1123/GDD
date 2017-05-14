@@ -110,7 +110,7 @@ BEGIN
 	END
 	ELSE
 	BEGIN
-	--Se encuentran turnos con horarios superpuestos, entonces se envía un mensaje indicando dicho suceso
+	--Se encuentran turnos con horarios superpuestos, entonces se envÃ­a un mensaje indicando dicho suceso
 		SET @codOp = 1;
 		SET @resultado = 'Se superponen los horarios con otro/s turno/s';
 	END;
@@ -164,7 +164,7 @@ BEGIN
 	END
 	ELSE
 	BEGIN
-	--Se encuentran turnos con horarios superpuestos, entonces se envía un mensaje indicando dicho suceso
+	--Se encuentran turnos con horarios superpuestos, entonces se envÃ­a un mensaje indicando dicho suceso
 		SET @codOp = 1;
 		SET @resultado = 'Se superponen los horarios con otro/s turno/s';
 	END;
@@ -240,9 +240,6 @@ CREATE PROCEDURE sp_auto_modif
 AS
 BEGIN
 	SET NOCOUNT ON;
-	
-	IF(@patente_nueva = '')
-		SET @patente_nueva = @patente;
 
     BEGIN TRY
 		SET @codOp = 0;
@@ -253,7 +250,7 @@ BEGIN
 			Auto_Rodado = @rodado,
 			Auto_Activo = @activo,
 			Auto_Chofer = @chofer,
-		    Auto_turno = @turno,
+		        Auto_turno = @turno,
 			Auto_patente = @patente_nueva
 		WHERE Auto_Patente =  @patente;
 	END TRY
