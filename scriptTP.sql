@@ -261,3 +261,40 @@ BEGIN
 			SET @resultado = 'Ocurrio un error al actualizar los datos de la tabla Auto';
 	END CATCH;
 END;
+
+GO
+
+CREATE PROCEDURE sp_viaje_alta 
+	 @viaje_cant_km numeric(18), 
+	 @viaje_hora_ini datetime,
+	 @viaje_hora_fin datetime,
+	 @viaje_chofer numeric(18),
+	 @viaje_auto varchar(10),
+	 @viaje_turno int,
+	 @viaje_cliente numeric(18),
+	 @codOp   int OUT,
+	 @resultado  varchar(255) OUT
+AS
+BEGIN
+
+    SET NOCOUNT ON;
+
+    BEGIN TRY
+
+		SET @codOp = 0;
+		
+		INSERT INTO DBO.Viaje 
+		VALUES (@viaje_cant_km,@viaje_hora_ini,@viaje_hora_fin,@viaje_chofer,@viaje_auto,@viaje_turno,@viaje_cliente);
+
+	END TRY
+	BEGIN CATCH
+
+		SET @codOp = @@ERROR;
+
+		IF(@codOp <> 0)
+			SET @resultado = 'Ocurrio un error al realizar INSERT en la tabla Viaje';
+
+	END CATCH
+	
+END;
+
