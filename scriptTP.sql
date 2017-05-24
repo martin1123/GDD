@@ -264,7 +264,56 @@ END;
 
 GO
 
-CREATE PROCEDURE sp_viaje_alta 
+CREATE FUNCTION [dbo].[exist_car]
+(
+	@PATENTE varchar(10)
+)
+RETURNS int
+AS
+BEGIN
+	
+	RETURN (SELECT COUNT(*) 
+			 FROM DBO.Auto
+		   WHERE Auto_Patente = @PATENTE);
+
+END;
+
+GO
+
+CREATE FUNCTION [dbo].[exist_chofer]
+(
+	@DNI numeric(18)
+)
+RETURNS int
+AS
+BEGIN
+	
+	RETURN (SELECT COUNT(*) 
+			 FROM DBO.Chofer
+		   WHERE Chofer_Dni = @DNI);
+
+END;
+
+GO
+
+CREATE FUNCTION [dbo].[exist_turn]
+(
+	@TURNO int
+)
+RETURNS int
+AS
+BEGIN
+	
+	RETURN (SELECT COUNT(*) 
+			 FROM DBO.Turno
+		   WHERE Turno_Codigo = @TURNO);
+
+END;
+
+GO
+
+CREATE PROCEDURE [dbo].[sp_viaje_alta] 
+	-- Add the parameters for the stored procedure here
 	 @viaje_cant_km numeric(18), 
 	 @viaje_hora_ini datetime,
 	 @viaje_hora_fin datetime,
@@ -276,25 +325,51 @@ CREATE PROCEDURE sp_viaje_alta
 	 @resultado  varchar(255) OUT
 AS
 BEGIN
+	SET NOCOUNT ON;
+	SET @codOp = 0;
 
-    SET NOCOUNT ON;
+	IF(dbo.exist_car(@viaje_auto) = 0)
+	BEGIN
+		SET @codOp = 1;
+		SET @resultado = 'No existe un auto con la patente ingresada';
+	END
+	ELSE IF(dbo.exist_chofer(@viaje_chofer) = 0)
+	BEGIN
+		SET @codOp = 2;
+		SET @resultado = 'El chofer ingresado no se encuentra registrado en el sistema';
+	END
+	ELSE IF(dbo.exist_turn(@viaje_turno) = 0)
+	BEGIN
+		SET @codOp = 3;
+		SET @resultado = 'No existe el turno ingresado';
+	END;
 
-    BEGIN TRY
+	IF (@codOp = 0)
+	BEGIN
+		BEGIN TRY
+		--SE VERIFICA QUE NO EXISTA UN VIAJE PARA EL MISMO CLIENTE EN LA MISMA FECHA Y HORA
+			IF((SELECT COUNT(*) 
+				 FROM DBO.Viaje 
+			    WHERE Viaje_Cliente = @viaje_cliente 
+			      AND @viaje_hora_ini BETWEEN Viaje_Fecha_Hora_Inicio AND Viaje_Fecha_Hora_Fin 
+			      AND @viaje_hora_FIN BETWEEN Viaje_Fecha_Hora_Inicio AND Viaje_Fecha_Hora_Fin) > 0)
+			BEGIN
+				SET @codOp = 4;
+				SET @resultado = 'Ya existe un viaje registrado en la misma fecha y hora para el cliente ingresado';
+			END
+			ELSE
+			BEGIN
+				INSERT INTO DBO.Viaje 
+				VALUES (@viaje_cant_km,@viaje_hora_ini,@viaje_hora_ini,@viaje_hora_fin,@viaje_chofer,@viaje_auto,@viaje_turno,@viaje_cliente);
+			END
+		END TRY
+		BEGIN CATCH
 
-		SET @codOp = 0;
-		
-		INSERT INTO DBO.Viaje 
-		VALUES (@viaje_cant_km,@viaje_hora_ini,@viaje_hora_fin,@viaje_chofer,@viaje_auto,@viaje_turno,@viaje_cliente);
+			SET @codOp = @@ERROR;
 
-	END TRY
-	BEGIN CATCH
+			IF(@codOp <> 0)
+				SET @resultado = 'Ocurrio un error al realizar INSERT en la tabla Viaje';
 
-		SET @codOp = @@ERROR;
-
-		IF(@codOp <> 0)
-			SET @resultado = 'Ocurrio un error al realizar INSERT en la tabla Viaje';
-
-	END CATCH
-	
+		END CATCH
+	END;
 END;
-
