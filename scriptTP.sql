@@ -372,10 +372,10 @@ BEGIN
 			IF((SELECT COUNT(*) 
 				 FROM DBO.Viaje 
 			    WHERE Viaje_Cliente = @viaje_cliente 
-			      AND @viaje_hora_ini BETWEEN Viaje_Fecha_Hora_Inicio AND Viaje_Fecha_Hora_Fin 
-			      AND @viaje_hora_FIN BETWEEN Viaje_Fecha_Hora_Inicio AND Viaje_Fecha_Hora_Fin) > 0)
+			      AND (@viaje_hora_ini BETWEEN Viaje_Fecha_Hora_Inicio AND Viaje_Fecha_Hora_Fin 
+			           OR @viaje_hora_FIN BETWEEN Viaje_Fecha_Hora_Inicio AND Viaje_Fecha_Hora_Fin)) > 0)
 			BEGIN
-				SET @codOp = 4;
+				SET @codOp = 5;
 				SET @resultado = 'Ya existe un viaje registrado en la misma fecha y hora para el cliente ingresado';
 			END
 			ELSE
