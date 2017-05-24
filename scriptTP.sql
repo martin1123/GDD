@@ -312,6 +312,22 @@ END;
 
 GO
 
+CREATE FUNCTION [dbo].[exist_client]
+(
+	@CLIENT_TEL numeric(18)
+)
+RETURNS int
+AS
+BEGIN
+	
+	RETURN (SELECT COUNT(*) 
+			 FROM DBO.Cliente
+		   WHERE Cliente_Telefono = @CLIENT_TEL);
+
+END;
+
+GO
+
 CREATE PROCEDURE [dbo].[sp_viaje_alta] 
 	-- Add the parameters for the stored procedure here
 	 @viaje_cant_km numeric(18), 
@@ -342,6 +358,11 @@ BEGIN
 	BEGIN
 		SET @codOp = 3;
 		SET @resultado = 'No existe el turno ingresado';
+	END
+	ELSE IF(dbo.exist_client(@viaje_cliente) = 0)
+	BEGIN
+		SET @codOp = 4;
+		SET @resultado = 'El cliente ingresado no se encuentra registrado';
 	END;
 
 	IF (@codOp = 0)
