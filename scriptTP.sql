@@ -4,6 +4,35 @@ GO
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
+
+-- =======================================================================
+-- Author:		Martin Maccio
+-- Create date: 25/05/2017
+-- Description:	Trigger que verifica que no se de de alta mas de un viaje
+--              en el mismo momento para un mismo cliente.
+-- =======================================================================
+CREATE TRIGGER T_VIAJE_CLIENTE ON DBO.VIAJE INSTEAD OF INSERT
+AS
+BEGIN
+	--SE CORROBORA QUE EL VIAJE A INSERTAR NO SE HAYA REALIZADO EN UN MOMENTO EN EL CUAL EL CLIENTE REALIZO OTRO VIAJE
+	IF(EXISTS(SELECT * 
+				 FROM INSERTED A, DBO.VIAJE B
+			    WHERE A.Viaje_Cliente = B.Viaje_Cliente
+			      AND (A.Viaje_Fecha_Hora_Inicio BETWEEN B.Viaje_Fecha_Hora_Inicio AND B.Viaje_Fecha_Hora_Fin
+					   OR A.Viaje_Fecha_Hora_Fin BETWEEN B.Viaje_Fecha_Hora_Inicio AND B.Viaje_Fecha_Hora_Fin)))
+	BEGIN
+	--SE RECHAZA VIAJE
+		PRINT('Un cliente no puede tener mas de un viaje en el mismo rango horario');
+		ROLLBACK;
+	END
+	ELSE
+	BEGIN
+	--SI SE REALIZA VIAJE EN UNA FRANJA HORARIA DISPONIBLE SE REALIZA EL ALTA DEL VIAJE
+		INSERT INTO DBO.Viaje (VIAJE_CANT_KILOMETROS,VIAJE_FECHA_HORA_INICIO,VIAJE_FECHA_HORA_FIN,VIAJE_CHOFER,VIAJE_AUTO,VIAJE_TURNO,VIAJE_CLIENTE) 
+		SELECT VIAJE_CANT_KILOMETROS, VIAJE_FECHA_HORA_INICIO, VIAJE_FECHA_HORA_FIN, VIAJE_CHOFER, VIAJE_AUTO, VIAJE_TURNO, VIAJE_CLIENTE FROM INSERTED;
+	END;
+END;
+
 GO
 
 -- =======================================================================
@@ -368,21 +397,8 @@ BEGIN
 	IF (@codOp = 0)
 	BEGIN
 		BEGIN TRY
-		--SE VERIFICA QUE NO EXISTA UN VIAJE PARA EL MISMO CLIENTE EN LA MISMA FECHA Y HORA
-			IF((SELECT COUNT(*) 
-				 FROM DBO.Viaje 
-			    WHERE Viaje_Cliente = @viaje_cliente 
-			      AND (@viaje_hora_ini BETWEEN Viaje_Fecha_Hora_Inicio AND Viaje_Fecha_Hora_Fin 
-			           OR @viaje_hora_FIN BETWEEN Viaje_Fecha_Hora_Inicio AND Viaje_Fecha_Hora_Fin)) > 0)
-			BEGIN
-				SET @codOp = 5;
-				SET @resultado = 'Ya existe un viaje registrado en la misma fecha y hora para el cliente ingresado';
-			END
-			ELSE
-			BEGIN
-				INSERT INTO DBO.Viaje 
-				VALUES (@viaje_cant_km,@viaje_hora_ini,@viaje_hora_ini,@viaje_hora_fin,@viaje_chofer,@viaje_auto,@viaje_turno,@viaje_cliente);
-			END
+			INSERT INTO DBO.Viaje 
+			VALUES (@viaje_cant_km,@viaje_hora_ini,@viaje_hora_ini,@viaje_hora_fin,@viaje_chofer,@viaje_auto,@viaje_turno,@viaje_cliente);
 		END TRY
 		BEGIN CATCH
 
