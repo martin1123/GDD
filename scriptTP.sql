@@ -410,3 +410,86 @@ BEGIN
 		END CATCH
 	END;
 END;
+
+GO
+
+CREATE PROCEDURE sp_rendicion_viajes 
+-----------Autor----------------
+----Jonathan--------------------
+
+
+	 @chofer_telefono numeric(18), 
+	 @fecha datetime,
+	 @turno_codigo int,
+	 @porcentaje numeric(18),
+	 @codOp   int OUT,
+	 @resultado  varchar(255) OUT
+
+AS
+
+BEGIN
+
+	DECLARE 
+	@turno_precio numeric(18),
+	@resultado_final numeric(18),
+	@cant_kilometros numeric(18)
+    
+	SET NOCOUNT ON;
+
+	--SE VERIFICA QUE NO EXISTA UNA RENDICIÓN PARA EL MISMO CHOFER EL MISMO DIA Y TURNO
+		IF(SELECT 
+		count(1) 
+		from SAPNU_PUAS.Rendicion
+		where 
+		Rendicion_Chofer = @chofer_telefono
+		and Rendicion_Fecha = @fecha
+		and Rendicion_Turno = @turno_codigo)>0
+
+	BEGIN
+			SET @codOp = 1;
+			SET @resultado = 
+			'Ya existe una rendicion registrada en la misma fecha para el chofer ingresado';
+	END
+	
+	ELSE
+
+		BEGIN
+
+
+			SELECT 
+			@cant_kilometros = sum(Viaje_Cant_Kilometros) 
+			FROM SAPNU_PUAS.Viaje 
+			WHERE 
+			Viaje_Chofer = @chofer_telefono and 
+			@fecha between Viaje_Fecha_Hora_Inicio and Viaje_Fecha_Hora_Fin and
+			Viaje_Turno = @turno_codigo;
+
+
+			SELECT 
+			@turno_precio = (turno_precio_base + turno_valor_kilometro) 
+			from SAPNU_PUAS.Turno 
+			where turno_codigo = @turno_codigo;
+
+			SET @resultado_final = @cant_kilometros * @turno_precio
+    
+			BEGIN TRY
+
+				SET @codOp = 0;
+		
+				INSERT INTO SAPNU_PUAS.Rendicion 
+				(Rendicion_Fecha, Rendicion_Importe, Rendicion_Chofer, Rendicion_Turno, Rendicion_Porcentaje)
+				VALUES (@fecha, @resultado_final, @chofer_telefono, @turno_codigo, @porcentaje);
+
+			END TRY
+	
+			BEGIN CATCH
+
+				SET @codOp = @@ERROR;
+
+				IF(@codOp <> 0)
+				SET @resultado = 'Ocurrio un error al realizar INSERT en la tabla Rendicion';
+
+			END CATCH
+	
+		END
+END;
