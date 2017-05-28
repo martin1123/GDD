@@ -12,17 +12,21 @@ SET QUOTED_IDENTIFIER ON
 --              en el mismo momento para un mismo cliente.
 -- =======================================================================
 CREATE TRIGGER T_VIAJE_CLIENTE ON DBO.VIAJE INSTEAD OF INSERT
-AS
+AS 
 BEGIN
 	--SE CORROBORA QUE EL VIAJE A INSERTAR NO SE HAYA REALIZADO EN UN MOMENTO EN EL CUAL EL CLIENTE REALIZO OTRO VIAJE
+	--TAMBIEN SE CORROBORA QUE LA HORA DE INICIO Y DE FIN DEL VIAJE ESTEN INCLUIDAS DENTRO DEL TURNO CORRESPONDIENTE.
 	IF(EXISTS(SELECT * 
-				 FROM INSERTED A, DBO.VIAJE B
+				 FROM INSERTED A, DBO.VIAJE B, DBO.TURNO C
 			    WHERE A.Viaje_Cliente = B.Viaje_Cliente
-			      AND (A.Viaje_Fecha_Hora_Inicio BETWEEN B.Viaje_Fecha_Hora_Inicio AND B.Viaje_Fecha_Hora_Fin
+				  AND A.Viaje_Turno = C.Turno_Codigo
+			      AND ((SELECT DATEPART(HOUR, A.Viaje_Fecha_Hora_Inicio)) NOT BETWEEN C.Turno_Hora_Inicio AND C.Turno_Hora_Fin
+					   OR (SELECT DATEPART(HOUR, A.Viaje_Fecha_Hora_Fin)) NOT BETWEEN C.Turno_Hora_Inicio AND C.Turno_Hora_Fin
+					   OR A.Viaje_Fecha_Hora_Inicio BETWEEN B.Viaje_Fecha_Hora_Inicio AND B.Viaje_Fecha_Hora_Fin
 					   OR A.Viaje_Fecha_Hora_Fin BETWEEN B.Viaje_Fecha_Hora_Inicio AND B.Viaje_Fecha_Hora_Fin)))
 	BEGIN
 	--SE RECHAZA VIAJE
-		PRINT('Un cliente no puede tener mas de un viaje en el mismo rango horario');
+		PRINT('Las horas de inicio y fin a insertar no son válidas. Corroborar que el inicio y fin del viaje sea dentro del mismo turno, y que para un mismo cliente no exista mas de un viaje en el mismo momento.');
 		ROLLBACK;
 	END
 	ELSE
@@ -54,7 +58,8 @@ BEGIN
 
 	SET @Result = (SELECT COUNT(*) 
 					FROM dbo.Auto
-				   WHERE Auto_Patente = @patente); 
+				   WHERE Auto_Patente = @patente
+				     AND Auto_Activo = 1); 
 
 
 	RETURN @Result
@@ -303,7 +308,8 @@ BEGIN
 	
 	RETURN (SELECT COUNT(*) 
 			 FROM DBO.Auto
-		   WHERE Auto_Patente = @PATENTE);
+		   WHERE Auto_Patente = @PATENTE
+		     AND Auto_Activo = 1);
 
 END;
 
@@ -319,7 +325,8 @@ BEGIN
 	
 	RETURN (SELECT COUNT(*) 
 			 FROM DBO.Chofer
-		   WHERE Chofer_Dni = @DNI);
+		   WHERE Chofer_Dni = @DNI
+		     AND Chofer_Activo = 1);
 
 END;
 
@@ -335,7 +342,8 @@ BEGIN
 	
 	RETURN (SELECT COUNT(*) 
 			 FROM DBO.Turno
-		   WHERE Turno_Codigo = @TURNO);
+		   WHERE Turno_Codigo = @TURNO
+		     AND Turno_Activo = 1);
 
 END;
 
@@ -351,7 +359,8 @@ BEGIN
 	
 	RETURN (SELECT COUNT(*) 
 			 FROM DBO.Cliente
-		   WHERE Cliente_Telefono = @CLIENT_TEL);
+		   WHERE Cliente_Telefono = @CLIENT_TEL
+			 AND Cliente_Activo = 1);
 
 END;
 
@@ -372,25 +381,31 @@ AS
 BEGIN
 	SET NOCOUNT ON;
 	SET @codOp = 0;
-
-	IF(dbo.exist_car(@viaje_auto) = 0)
+	--Verifica que el viaje se realice dentro del mismo día
+	IF((SELECT DATEPART(DAY, @viaje_hora_ini)) <> (SELECT DATEPART(DAY, @viaje_hora_fin)))
 	BEGIN
 		SET @codOp = 1;
-		SET @resultado = 'No existe un auto con la patente ingresada';
+		SET @resultado = 'La hora de inicio y fin del viaje deben corresponder al mismo día.';
+
+	END
+	ELSE IF(dbo.exist_car(@viaje_auto) = 0)
+	BEGIN
+		SET @codOp = 2;
+		SET @resultado = 'No existe un auto activo con la patente ingresada';
 	END
 	ELSE IF(dbo.exist_chofer(@viaje_chofer) = 0)
 	BEGIN
-		SET @codOp = 2;
-		SET @resultado = 'El chofer ingresado no se encuentra registrado en el sistema';
+		SET @codOp = 3;
+		SET @resultado = 'El chofer ingresado no se encuentra activo en el sistema';
 	END
 	ELSE IF(dbo.exist_turn(@viaje_turno) = 0)
 	BEGIN
-		SET @codOp = 3;
+		SET @codOp = 4;
 		SET @resultado = 'No existe el turno ingresado';
 	END
 	ELSE IF(dbo.exist_client(@viaje_cliente) = 0)
 	BEGIN
-		SET @codOp = 4;
+		SET @codOp = 5;
 		SET @resultado = 'El cliente ingresado no se encuentra registrado';
 	END;
 
