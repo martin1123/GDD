@@ -441,7 +441,7 @@ BEGIN
 	BEGIN
 		BEGIN TRY
 			INSERT INTO SAPNU_PUAS.Viaje 
-			VALUES (@viaje_cant_km,@viaje_hora_ini,@viaje_hora_ini,@viaje_hora_fin,@viaje_chofer,@viaje_auto,@viaje_turno,@viaje_cliente);
+			VALUES (@viaje_cant_km,@viaje_hora_ini,@viaje_hora_fin,@viaje_chofer,@viaje_auto,@viaje_turno,@viaje_cliente);
 		END TRY
 		BEGIN CATCH
 
