@@ -456,11 +456,12 @@ END;
 
 GO
 
-CREATE PROCEDURE sp_rendicion_viajes 
+--=================================================================================
+CREATE PROCEDURE SAPNU_PUAS.sp_rendicion_viajes 
 -----------Autor----------------
-----Jonathan--------------------
+---------Jonathan---------------
 
-
+-----Declaracion de Parametros-----
 	 @chofer_telefono numeric(18), 
 	 @fecha datetime,
 	 @turno_codigo int,
@@ -472,56 +473,77 @@ AS
 
 BEGIN
 
+-----Declaracion de Variables-----
 	DECLARE 
 	@turno_precio numeric(18),
 	@resultado_final numeric(18),
-	@cant_kilometros numeric(18)
+	@cant_kilometros numeric(18),
+	@precio_base numeric(18),
+	@rendicion_nro numeric(18);
     
 	SET NOCOUNT ON;
 
-	--SE VERIFICA QUE NO EXISTA UNA RENDICIÓN PARA EL MISMO CHOFER EL MISMO DIA Y TURNO
+--SE VERIFICA QUE NO EXISTA UNA RENDICIÓN PARA EL MISMO CHOFER EL MISMO DIA Y TURNO--
 		IF(SELECT 
 		count(1) 
 		from SAPNU_PUAS.Rendicion
 		where 
 		Rendicion_Chofer = @chofer_telefono
-		and Rendicion_Fecha = @fecha
-		and Rendicion_Turno = @turno_codigo)>0
+		and CONVERT(date,Rendicion_Fecha) = CONVERT(date,@fecha)
+		and Rendicion_Turno = @turno_codigo) > 0
 
 	BEGIN
 			SET @codOp = 1;
 			SET @resultado = 
-			'Ya existe una rendicion registrada en la misma fecha para el chofer ingresado';
+			'Ya existe una rendicion registrada en la misma fecha para el chofer ingresado para ese turno';
 	END
 	
 	ELSE
 
 		BEGIN
 
-
+			--OBTENGO EL VALOR POR KILOMETRO Y EL PRECIO BASE DEL TURNO INGRESADO
 			SELECT 
-			@cant_kilometros = sum(Viaje_Cant_Kilometros) 
+			@turno_precio = turno_valor_kilometro, 
+			@precio_base = turno_precio_base
+			FROM SAPNU_PUAS.Turno 
+			WHERE 
+			turno_codigo = @turno_codigo;
+
+			--CALCULO EL VALOR FINAL DE LA RENDICION PARA ESE CHOFER EN ESE TURNO PARA ESE DIA
+			SELECT 
+			@resultado_final = sum(Viaje_Cant_Kilometros * @turno_precio + @precio_base) 
 			FROM SAPNU_PUAS.Viaje 
 			WHERE 
 			Viaje_Chofer = @chofer_telefono and 
-			@fecha between Viaje_Fecha_Hora_Inicio and Viaje_Fecha_Hora_Fin and
+			CONVERT(date,@fecha) = CONVERT(date,Viaje_Fecha_Hora_Inicio) and
 			Viaje_Turno = @turno_codigo;
 
-
-			SELECT 
-			@turno_precio = (turno_precio_base + turno_valor_kilometro) 
-			from SAPNU_PUAS.Turno 
-			where turno_codigo = @turno_codigo;
-
-			SET @resultado_final = @cant_kilometros * @turno_precio
-    
+			
 			BEGIN TRY
+					
+					SET @codOp = 0;
 
-				SET @codOp = 0;
-		
-				INSERT INTO SAPNU_PUAS.Rendicion 
-				(Rendicion_Fecha, Rendicion_Importe, Rendicion_Chofer, Rendicion_Turno, Rendicion_Porcentaje)
-				VALUES (@fecha, @resultado_final, @chofer_telefono, @turno_codigo, @porcentaje);
+					BEGIN TRANSACTION T1
+						
+						--INSERTO LA RENDICION DE ESE CHOFER PARA ESE TURNO PARA ESE DIA
+						INSERT INTO SAPNU_PUAS.Rendicion 
+						(Rendicion_Fecha, Rendicion_Importe, Rendicion_Chofer, Rendicion_Turno, Rendicion_Porcentaje)
+						VALUES (@fecha, @resultado_final, @chofer_telefono, @turno_codigo, @porcentaje);
+
+						--OBTENGO EL CODIGO DE LA RENDICION RECIEN INSERTADA PARA USARLA EN EL PROXIMO INSERT
+						SELECT @rendicion_nro = MAX(Rendicion_Nro) FROM SAPNU_PUAS.Rendicion;
+
+						--INSERTO TODOS LOS VIAJES EN VIAJE X RENDICION DESDE LA TABLA DE VIAJES PARA EL CHOFER ESE DIA Y EN ESE TURNO
+						INSERT INTO SAPNU_PUAS.Viaje_x_Rendicion
+						SELECT Viaje_Codigo, @rendicion_nro from SAPNU_PUAS.Viaje 
+						WHERE 
+						Viaje_Chofer = @chofer_telefono and 
+						CONVERT(date,@fecha) = CONVERT(date,Viaje_Fecha_Hora_Inicio) and
+						Viaje_Turno = @turno_codigo;
+
+					--CONFIRMO TRANSACCIONES
+					COMMIT TRANSACTION T1
 
 			END TRY
 	
@@ -530,7 +552,9 @@ BEGIN
 				SET @codOp = @@ERROR;
 
 				IF(@codOp <> 0)
-				SET @resultado = 'Ocurrio un error al realizar INSERT en la tabla Rendicion';
+				SET @resultado = 'Ocurrio un error al realizar INSERT en Rendicion/Viaje_x_Rendicion';
+					--ROLLBACK DE TODAS LAS TRANSACCIONES REALIZADAS PORQUE ALGUNA FALLO
+					ROLLBACK TRANSACTION T1
 
 			END CATCH
 	
