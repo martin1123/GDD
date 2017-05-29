@@ -58,8 +58,7 @@ BEGIN
 
 	SET @Result = (SELECT COUNT(*) 
 					FROM dbo.Auto
-				   WHERE Auto_Patente = @patente
-				     AND Auto_Activo = 1); 
+				   WHERE Auto_Patente = @patente); 
 
 
 	RETURN @Result
@@ -308,8 +307,7 @@ BEGIN
 	
 	RETURN (SELECT COUNT(*) 
 			 FROM DBO.Auto
-		   WHERE Auto_Patente = @PATENTE
-		     AND Auto_Activo = 1);
+		   WHERE Auto_Patente = @PATENTE);
 
 END;
 
@@ -325,8 +323,7 @@ BEGIN
 	
 	RETURN (SELECT COUNT(*) 
 			 FROM DBO.Chofer
-		   WHERE Chofer_Dni = @DNI
-		     AND Chofer_Activo = 1);
+		   WHERE Chofer_Dni = @DNI);
 
 END;
 
@@ -342,8 +339,7 @@ BEGIN
 	
 	RETURN (SELECT COUNT(*) 
 			 FROM DBO.Turno
-		   WHERE Turno_Codigo = @TURNO
-		     AND Turno_Activo = 1);
+		   WHERE Turno_Codigo = @TURNO);
 
 END;
 
@@ -359,8 +355,7 @@ BEGIN
 	
 	RETURN (SELECT COUNT(*) 
 			 FROM DBO.Cliente
-		   WHERE Cliente_Telefono = @CLIENT_TEL
-			 AND Cliente_Activo = 1);
+		   WHERE Cliente_Telefono = @CLIENT_TEL);
 
 END;
 
