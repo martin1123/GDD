@@ -11,13 +11,13 @@ SET QUOTED_IDENTIFIER ON
 -- Description:	Trigger que verifica que no se de de alta mas de un viaje
 --              en el mismo momento para un mismo cliente.
 -- =======================================================================
-CREATE TRIGGER T_VIAJE_CLIENTE ON DBO.VIAJE INSTEAD OF INSERT
+CREATE TRIGGER T_VIAJE_CLIENTE ON SAPNU_PUAS.VIAJE INSTEAD OF INSERT
 AS 
 BEGIN
 	--SE CORROBORA QUE EL VIAJE A INSERTAR NO SE HAYA REALIZADO EN UN MOMENTO EN EL CUAL EL CLIENTE REALIZO OTRO VIAJE
 	--TAMBIEN SE CORROBORA QUE LA HORA DE INICIO Y DE FIN DEL VIAJE ESTEN INCLUIDAS DENTRO DEL TURNO CORRESPONDIENTE.
 	IF(EXISTS(SELECT * 
-				 FROM INSERTED A, DBO.VIAJE B, DBO.TURNO C
+				 FROM INSERTED A, SAPNU_PUAS.VIAJE B, SAPNU_PUAS.TURNO C
 			    WHERE A.Viaje_Cliente = B.Viaje_Cliente
 				  AND A.Viaje_Turno = C.Turno_Codigo
 			      AND ((SELECT DATEPART(HOUR, A.Viaje_Fecha_Hora_Inicio)) NOT BETWEEN C.Turno_Hora_Inicio AND C.Turno_Hora_Fin
@@ -32,7 +32,7 @@ BEGIN
 	ELSE
 	BEGIN
 	--SI SE REALIZA VIAJE EN UNA FRANJA HORARIA DISPONIBLE SE REALIZA EL ALTA DEL VIAJE
-		INSERT INTO DBO.Viaje (VIAJE_CANT_KILOMETROS,VIAJE_FECHA_HORA_INICIO,VIAJE_FECHA_HORA_FIN,VIAJE_CHOFER,VIAJE_AUTO,VIAJE_TURNO,VIAJE_CLIENTE) 
+		INSERT INTO SAPNU_PUAS.Viaje (VIAJE_CANT_KILOMETROS,VIAJE_FECHA_HORA_INICIO,VIAJE_FECHA_HORA_FIN,VIAJE_CHOFER,VIAJE_AUTO,VIAJE_TURNO,VIAJE_CLIENTE) 
 		SELECT VIAJE_CANT_KILOMETROS, VIAJE_FECHA_HORA_INICIO, VIAJE_FECHA_HORA_FIN, VIAJE_CHOFER, VIAJE_AUTO, VIAJE_TURNO, VIAJE_CLIENTE FROM INSERTED;
 	END;
 END;
@@ -45,7 +45,7 @@ GO
 -- Description:	Funcion que verifica que la patente recibida por parametro 
 --				no exista en la tabla de Auto
 -- =======================================================================
-CREATE FUNCTION [dbo].[verificar_patente] 
+CREATE FUNCTION [SAPNU_PUAS].[verificar_patente] 
 (
 
 	@patente VARCHAR(10) 
@@ -57,7 +57,7 @@ BEGIN
 	DECLARE @Result int
 
 	SET @Result = (SELECT COUNT(*) 
-					FROM dbo.Auto
+					FROM SAPNU_PUAS.Auto
 				   WHERE Auto_Patente = @patente); 
 
 
@@ -74,7 +74,7 @@ GO
 --              de turnos sin tener en cuenta el turno a modificar. 
 --              Devuelve 0 si esta disponible, caso contrario devuelve distinto de 0.
 -- ==================================================================================
-CREATE FUNCTION[dbo].[is_available_hour_range]
+CREATE FUNCTION[SAPNU_PUAS].[is_available_hour_range]
 (
 	@iniHour int,
 	@endHour int,
@@ -88,7 +88,7 @@ BEGIN
 
 	-- Verifica si hay algun turno que se superponga con los horarios ingesados por parametro
 	set @Result = (SELECT COUNT(*)
-	                 FROM dbo.turno
+	                 FROM SAPNU_PUAS.turno
 				    WHERE Turno_Activo = 1
 					  AND Turno_Codigo <> @cod
 					  AND ((turno_hora_inicio <= @iniHour AND  @iniHour <  turno_hora_fin)
@@ -108,7 +108,7 @@ GO
 -- Create date: 09/05/2017
 -- Description:	SP que da de alta un turno
 -- =============================================
-CREATE PROCEDURE [dbo].[sp_turno_alta]
+CREATE PROCEDURE [SAPNU_PUAS].[sp_turno_alta]
 	-- Add the parameters for the stored procedure here
 	@horaInicio int,
 	@horaFin int,
@@ -124,14 +124,14 @@ BEGIN
 
 	SET NOCOUNT ON;
 	
-    SET @validHora = dbo.is_available_hour_range(@horaInicio,@horaFin, default);
+    SET @validHora = SAPNU_PUAS.is_available_hour_range(@horaInicio,@horaFin, default);
 
 	--Se valida que no haya ningun turno con el que se superpongan los horarios
 	IF(@validHora = 0)
 	BEGIN
 		BEGIN TRY
 			SET @codOp = 0;
-			INSERT INTO dbo.turno
+			INSERT INTO SAPNU_PUAS.turno
 			VALUES(@horaInicio,@horaFin,@descripcion,@valorkm,@precioBase,@activo);
 		END TRY
 		BEGIN CATCH
@@ -155,7 +155,7 @@ GO
 -- Create date: 09/05/2017
 -- Description:	SP que da de alta un turno
 -- =============================================
-CREATE PROCEDURE [dbo].[sp_turno_modif]
+CREATE PROCEDURE [SAPNU_PUAS].[sp_turno_modif]
 	-- Add the parameters for the stored procedure here
 	@codigo int,
 	@horaInicio int,
@@ -172,14 +172,14 @@ BEGIN
 
 	SET NOCOUNT ON;
 	
-    SET @validHora = dbo.is_available_hour_range(@horaInicio,@horaFin,@codigo);
+    SET @validHora = SAPNU_PUAS.is_available_hour_range(@horaInicio,@horaFin,@codigo);
 
 	--Se valida que no haya ningun turno con el que se superpongan los horarios
 	IF(@validHora = 0)
 	BEGIN
 		BEGIN TRY
 			SET @codOp = 0;
-			UPDATE dbo.turno
+			UPDATE SAPNU_PUAS.turno
 			SET Turno_Hora_Inicio = @horaInicio,
 				Turno_Hora_Fin = @horaFin,
 				Turno_Descripcion = @descripcion,
@@ -330,7 +330,7 @@ END;
 
 GO
 
-CREATE FUNCTION [dbo].[exist_car]
+CREATE FUNCTION [SAPNU_PUAS].[exist_car]
 (
 	@PATENTE varchar(10)
 )
@@ -339,14 +339,14 @@ AS
 BEGIN
 	
 	RETURN (SELECT COUNT(*) 
-			 FROM DBO.Auto
+			 FROM SAPNU_PUAS.Auto
 		   WHERE Auto_Patente = @PATENTE);
 
 END;
 
 GO
 
-CREATE FUNCTION [dbo].[exist_chofer]
+CREATE FUNCTION [SAPNU_PUAS].[exist_chofer]
 (
 	@DNI numeric(18)
 )
@@ -355,14 +355,14 @@ AS
 BEGIN
 	
 	RETURN (SELECT COUNT(*) 
-			 FROM DBO.Chofer
+			 FROM SAPNU_PUAS.Chofer
 		   WHERE Chofer_Dni = @DNI);
 
 END;
 
 GO
 
-CREATE FUNCTION [dbo].[exist_turn]
+CREATE FUNCTION [SAPNU_PUAS].[exist_turn]
 (
 	@TURNO int
 )
@@ -371,14 +371,14 @@ AS
 BEGIN
 	
 	RETURN (SELECT COUNT(*) 
-			 FROM DBO.Turno
+			 FROM SAPNU_PUAS.Turno
 		   WHERE Turno_Codigo = @TURNO);
 
 END;
 
 GO
 
-CREATE FUNCTION [dbo].[exist_client]
+CREATE FUNCTION [SAPNU_PUAS].[exist_client]
 (
 	@CLIENT_TEL numeric(18)
 )
@@ -387,14 +387,14 @@ AS
 BEGIN
 	
 	RETURN (SELECT COUNT(*) 
-			 FROM DBO.Cliente
+			 FROM SAPNU_PUAS.Cliente
 		   WHERE Cliente_Telefono = @CLIENT_TEL);
 
 END;
 
 GO
 
-CREATE PROCEDURE [dbo].[sp_viaje_alta] 
+CREATE PROCEDURE [SAPNU_PUAS].[sp_viaje_alta] 
 	-- Add the parameters for the stored procedure here
 	 @viaje_cant_km numeric(18), 
 	 @viaje_hora_ini datetime,
@@ -416,22 +416,22 @@ BEGIN
 		SET @resultado = 'La hora de inicio y fin del viaje deben corresponder al mismo día.';
 
 	END
-	ELSE IF(dbo.exist_car(@viaje_auto) = 0)
+	ELSE IF(SAPNU_PUAS.exist_car(@viaje_auto) = 0)
 	BEGIN
 		SET @codOp = 2;
 		SET @resultado = 'No existe un auto activo con la patente ingresada';
 	END
-	ELSE IF(dbo.exist_chofer(@viaje_chofer) = 0)
+	ELSE IF(SAPNU_PUAS.exist_chofer(@viaje_chofer) = 0)
 	BEGIN
 		SET @codOp = 3;
 		SET @resultado = 'El chofer ingresado no se encuentra activo en el sistema';
 	END
-	ELSE IF(dbo.exist_turn(@viaje_turno) = 0)
+	ELSE IF(SAPNU_PUAS.exist_turn(@viaje_turno) = 0)
 	BEGIN
 		SET @codOp = 4;
 		SET @resultado = 'No existe el turno ingresado';
 	END
-	ELSE IF(dbo.exist_client(@viaje_cliente) = 0)
+	ELSE IF(SAPNU_PUAS.exist_client(@viaje_cliente) = 0)
 	BEGIN
 		SET @codOp = 5;
 		SET @resultado = 'El cliente ingresado no se encuentra registrado';
@@ -440,7 +440,7 @@ BEGIN
 	IF (@codOp = 0)
 	BEGIN
 		BEGIN TRY
-			INSERT INTO DBO.Viaje 
+			INSERT INTO SAPNU_PUAS.Viaje 
 			VALUES (@viaje_cant_km,@viaje_hora_ini,@viaje_hora_ini,@viaje_hora_fin,@viaje_chofer,@viaje_auto,@viaje_turno,@viaje_cliente);
 		END TRY
 		BEGIN CATCH
