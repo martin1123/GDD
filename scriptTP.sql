@@ -211,7 +211,7 @@ GO
 --              En caso de ser exitosa el alta retorna 0, en caso contrario
 --              retornara un codigo de error y un mensaje descriptivo del error.
 -- ==============================================================================
-CREATE PROCEDURE sp_auto_alta 
+CREATE PROCEDURE [SAPNU_PUAS].[sp_auto_alta] 
 
 	@marca int, 
 	@modelo varchar(255), 
@@ -227,14 +227,22 @@ AS
 BEGIN
 	DECLARE @validDuplicado int
 
-	SET @validDuplicado = dbo.verificar_patente(@patente);
+	SET @validDuplicado = SAPNU_PUAS.verificar_patente(@patente);
 
 	IF(@validDuplicado = 0)
 	BEGIN
 		BEGIN TRY
 			SET @codOp = 0;
-			INSERT INTO dbo.Auto
-			VALUES(@marca,@modelo,@patente,@licencia,@rodado,@activo,@chofer,@turno);
+			IF(EXISTS(SELECT Auto_Chofer FROM SAPNU_PUAS.AUTO WHERE Auto_Chofer = @chofer AND Auto_Activo = 1))
+			BEGIN
+				SET @codOp = 2;
+				SET @resultado = 'Ya existe un auto activo registrado para el chofer ingresado';
+			END
+			ELSE
+			BEGIN
+				INSERT INTO [SAPNU_PUAS].Auto
+				VALUES(@marca,@modelo,@patente,@licencia,@rodado,@activo,@chofer,@turno);
+			END
 		END TRY
 		BEGIN CATCH
 			SET @codOp = @@ERROR;
@@ -258,7 +266,7 @@ GO
 -- Create date: 11/05/2017
 -- Description:	SP que realiza la modificacion de los Autos
 -- ========================================================
-CREATE PROCEDURE sp_auto_modif
+CREATE PROCEDURE [SAPNU_PUAS].[sp_auto_modif]
 	@marca int, 
 	@modelo varchar(255), 
 	@patente varchar(10), 
@@ -272,27 +280,52 @@ CREATE PROCEDURE sp_auto_modif
 	@resultado varchar(255) out
 AS
 BEGIN
+	DECLARE @validDuplicado int,
+			@choferAutos int
 	SET NOCOUNT ON;
+	SET @validDuplicado = 0;
 
-    BEGIN TRY
-		SET @codOp = 0;
-		UPDATE dbo.Auto
-		SET Auto_Marca = @marca,
-			Auto_Modelo = @modelo,
-			Auto_Licencia = @licencia,
-			Auto_Rodado = @rodado,
-			Auto_Activo = @activo,
-			Auto_Chofer = @chofer,
-		        Auto_turno = @turno,
-			Auto_patente = @patente_nueva
-		WHERE Auto_Patente =  @patente;
-	END TRY
-	BEGIN CATCH
-		SET @codOp = @@ERROR;
+	IF(@patente <> @patente_nueva)
+		SET @validDuplicado = SAPNU_PUAS.verificar_patente(@patente_nueva);
 
-		IF(@codOp <> 0)
-			SET @resultado = 'Ocurrio un error al actualizar los datos de la tabla Auto';
-	END CATCH;
+	IF(@validDuplicado = 0)
+	BEGIN
+		--Se verifica que un auto no tenga asignado un chofer que ya tenga un coche activo. Esta verificacion sirve en caso de que se cambie el chofer del auto.
+		--Se agrega la validación contra la patente(vieja en caso de que se haya modificado por una nueva), para que se excluya de la busqueda el registro que se esta alterando. 
+		IF(EXISTS(SELECT Auto_Chofer FROM SAPNU_PUAS.AUTO WHERE Auto_Chofer = @chofer AND Auto_Activo = 1 AND Auto_Patente <> @patente))
+		BEGIN
+			SET @codOp = 2;
+			SET @resultado = 'Ya existe un auto activo registrado para el chofer ingresado';
+		END
+		ELSE
+		BEGIN
+			BEGIN TRY
+				SET @codOp = 0;
+				UPDATE SAPNU_PUAS.Auto
+				SET Auto_Marca = @marca,
+					Auto_Modelo = @modelo,
+					Auto_Licencia = @licencia,
+					Auto_Rodado = @rodado,
+					Auto_Activo = @activo,
+					Auto_Chofer = @chofer,
+					Auto_turno = @turno,
+					Auto_patente = @patente_nueva
+				WHERE Auto_Patente =  @patente;
+			END TRY
+			BEGIN CATCH
+				SET @codOp = @@ERROR;
+		
+				IF(@codOp <> 0)
+					SET @resultado = 'Ocurrio un error al actualizar los datos de la tabla Auto';
+			END CATCH;
+		END;
+	END
+	ELSE
+	BEGIN
+	--Se encuentra otro auto con la misma patente en la base de datos
+		SET @codOp = 1;
+		SET @resultado = 'Ya existe un auto con la patente ingresada. Verifique que la patente ingresada sea correcta.';
+	END;
 END;
 
 GO
