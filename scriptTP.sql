@@ -512,7 +512,7 @@ BEGIN
 
 			--CALCULO EL VALOR FINAL DE LA RENDICION PARA ESE CHOFER EN ESE TURNO PARA ESE DIA
 			SELECT 
-			@resultado_final = sum(Viaje_Cant_Kilometros * @turno_precio + @precio_base) 
+			@resultado_final = (sum(Viaje_Cant_Kilometros * @turno_precio + @precio_base) * @porcentaje) 
 			FROM SAPNU_PUAS.Viaje 
 			WHERE 
 			Viaje_Chofer = @chofer_telefono and 
@@ -532,7 +532,7 @@ BEGIN
 						VALUES (@fecha, @resultado_final, @chofer_telefono, @turno_codigo, @porcentaje);
 
 						--OBTENGO EL CODIGO DE LA RENDICION RECIEN INSERTADA PARA USARLA EN EL PROXIMO INSERT
-						SELECT @rendicion_nro = MAX(Rendicion_Nro) FROM SAPNU_PUAS.Rendicion;
+						set @rendicion_nro = @@IDENTITY;
 
 						--INSERTO TODOS LOS VIAJES EN VIAJE X RENDICION DESDE LA TABLA DE VIAJES PARA EL CHOFER ESE DIA Y EN ESE TURNO
 						INSERT INTO SAPNU_PUAS.Viaje_x_Rendicion
@@ -560,3 +560,4 @@ BEGIN
 	
 		END
 END;
+GO
