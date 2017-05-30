@@ -465,7 +465,7 @@ CREATE PROCEDURE SAPNU_PUAS.sp_rendicion_viajes
 	 @chofer_telefono numeric(18), 
 	 @fecha datetime,
 	 @turno_codigo int,
-	 @porcentaje numeric(18),
+	 @porcentaje numeric(5,2),
 	 @codOp   int OUT,
 	 @resultado  varchar(255) OUT
 
