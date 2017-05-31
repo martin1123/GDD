@@ -561,3 +561,92 @@ BEGIN
 		END
 END;
 GO
+
+--Store Procedure de facturacion de clientes
+CREATE PROCEDURE SAPNU_PUAS.sp_fact_cliente 
+
+	 @fecha_ini datetime, 
+	 @fecha_fin datetime,
+	 @cliente numeric(18,0),
+	 @viajes_fact int,
+	 @codOp   int OUT,
+	 @resultado  varchar(255) OUT
+
+AS
+
+BEGIN
+
+
+	DECLARE 
+	@importe numeric(18,0),
+	@importe_turno numeric(18,0)
+    
+	SET NOCOUNT ON;
+
+		--Se verifica que exista el cliente recibido por parametro
+		IF(SAPNU_PUAS.exist_client(@cliente) = 0)
+		BEGIN
+			SET @codOp = 1;
+			SET @resultado = 'No se encuentra registrado en la base de datos el cliente ingresado.';
+		END
+		ELSE
+		
+		--SI CONTROLA QUE NO EXISTA UNA FACTURACION REALIZADA EN EL MISMO MES PARA EL CLIENTE, EN CASO DE HABERLO, SE CANCELA LA FACTURACION.
+		IF(EXISTS(SELECT * FROM SAPNU_PUAS.FACTURA
+				   WHERE Factura_Cliente = @cliente
+				     AND (Factura_Fecha_Inicio BETWEEN @fecha_ini AND @fecha_fin OR
+					      Factura_Fecha_Fin    BETWEEN @fecha_ini AND @fecha_fin )))
+
+		BEGIN
+			SET @codOp = 2;
+			SET @resultado = 'Ya existe una facturacion realizada para el mes ingresado. Verifique las fechas ingresadas.';
+		END
+	
+		ELSE
+
+		BEGIN
+
+			--SE DECLARA CURSOR QUE RECUPERA EL IMPORTE TOTAL POR CADA TURNO
+			DECLARE IMPORTES_TURNO_CURSOR CURSOR FOR
+			SELECT SUM(B.Turno_Precio_Base)+SUM(A.Viaje_Cant_Kilometros)*b.Turno_Valor_Kilometro as IMPORTE_TURNO
+			  FROM SAPNU_PUAS.Viaje A, SAPNU_PUAS.Turno B
+            		 WHERE A.Viaje_Cliente = @cliente
+               	           AND A.Viaje_Fecha_Hora_Inicio BETWEEN @fecha_ini AND @fecha_fin
+                           AND A.Viaje_Fecha_Hora_Fin    BETWEEN @fecha_ini AND @fecha_fin
+                           AND B.Turno_Codigo = A.Viaje_Turno
+                         GROUP BY A.Viaje_Turno, b.Turno_Valor_Kilometro;
+
+			OPEN IMPORTES_TURNO_CURSOR;
+
+			SET @importe = 0;
+			FETCH NEXT FROM IMPORTES_TURNO_CURSOR INTO @importe_turno
+			
+			--SUMA LOS IMPORTES DE CADA TURNO EN LA VARIABLE @IMPORTE
+			WHILE @@FETCH_STATUS = 0  
+			BEGIN  
+				SET @importe = (@importe  + @importe_turno);
+				FETCH NEXT FROM IMPORTES_TURNO_CURSOR INTO @importe_turno
+			END;
+
+			CLOSE IMPORTES_TURNO_CURSOR  ;
+			DEALLOCATE IMPORTES_TURNO_CURSOR  ;
+
+			BEGIN TRY
+					
+				SET @codOp = 0;
+
+				INSERT INTO SAPNU_PUAS.Factura
+				VALUES (@fecha_ini,@fecha_fin,@importe,SYSDATETIME(),@cliente);
+
+			END TRY
+	
+			BEGIN CATCH
+
+				SET @codOp = @@ERROR;
+				SET @resultado = 'Ocurrio un error al registrar la facturacion en la tabla de facturas.';
+
+			END CATCH
+	
+		END
+END;
+GO
