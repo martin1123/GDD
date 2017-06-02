@@ -650,3 +650,27 @@ BEGIN
 		END
 END;
 GO
+
+CREATE FUNCTION [SAPNU_PUAS].[viajes_mas_largos](@anio int, @mes_inicio int, @mes_fin int)
+RETURNS TABLE 
+AS
+RETURN
+SELECT top 5
+C.Chofer_Nombre,
+C.Chofer_Apellido,
+V.Viaje_Cant_Kilometros AS Cant_Kms,
+Cl.Cliente_Nombre,
+Cl.Cliente_Apellido,
+V.Viaje_Fecha_Hora_Inicio,
+V.Viaje_Fecha_Hora_Fin     
+FROM SAPNU_PUAS.Viaje V
+JOIN SAPNU_PUAS.Chofer C
+ON V.Viaje_Chofer = C.Chofer_Telefono
+JOIN SAPNU_PUAS.Cliente Cl
+ON V.Viaje_Cliente = Cl.Cliente_Telefono
+WHERE 
+YEAR(V.Viaje_Fecha_Hora_Inicio) = @anio and
+MONTH(V.Viaje_Fecha_Hora_Inicio) BETWEEN @mes_inicio and @mes_fin
+order by 3 desc
+
+GO
