@@ -681,19 +681,41 @@ RETURN
 SELECT top 5
 C.Chofer_Nombre,
 C.Chofer_Apellido,
-V.Viaje_Cant_Kilometros AS Cant_Kms,
-Cl.Cliente_Nombre,
-Cl.Cliente_Apellido,
-V.Viaje_Fecha_Hora_Inicio,
-V.Viaje_Fecha_Hora_Fin     
+C.Chofer_Mail,
+max(V.Viaje_Cant_Kilometros) AS Cant_Kms    
 FROM SAPNU_PUAS.Viaje V
 JOIN SAPNU_PUAS.Chofer C
 ON V.Viaje_Chofer = C.Chofer_Telefono
-JOIN SAPNU_PUAS.Cliente Cl
-ON V.Viaje_Cliente = Cl.Cliente_Telefono
 WHERE 
 YEAR(V.Viaje_Fecha_Hora_Inicio) = @anio and
 MONTH(V.Viaje_Fecha_Hora_Inicio) BETWEEN @mes_inicio and @mes_fin
-order by 3 desc
+group by C.Chofer_Nombre, C.Chofer_Apellido, C.Chofer_Mail
+order by max(V.Viaje_Cant_Kilometros) desc
 
 GO
+
+CREATE FUNCTION [SAPNU_PUAS].[clientes_mayor_consumo](@anio int, @mes_inicio int, @mes_fin int)
+RETURNS TABLE 
+AS
+RETURN
+
+select
+top 5
+C.Cliente_Apellido Apellido,
+C.Cliente_Nombre Nombre,
+C.Cliente_Mail Mail,
+sum(F.Factura_Importe) as Importe
+
+
+FROM SAPNU_PUAS.Factura F
+
+INNER JOIN SAPNU_PUAS.Cliente C
+ON F.Factura_Cliente = C.Cliente_Telefono
+
+ WHERE
+ YEAR(F.Factura_Fecha) = @anio and
+ MONTH(F.Factura_Fecha) BETWEEN @mes_inicio and @mes_fin
+ group by C.Cliente_Apellido,C.Cliente_Nombre,C.Cliente_Mail
+ order by sum(F.Factura_Importe) desc
+
+ GO
