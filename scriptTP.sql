@@ -568,7 +568,6 @@ CREATE PROCEDURE [SAPNU_PUAS].[sp_fact_cliente]
 	 @fecha_ini datetime, 
 	 @fecha_fin datetime,
 	 @cliente numeric(18,0),
-	 @viajes_fact int,
 	 @codOp   int OUT,
 	 @resultado  varchar(255) OUT
 
