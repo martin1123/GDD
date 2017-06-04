@@ -652,6 +652,8 @@ BEGIN
 			        SELECT Factura_Nro, Viaje_Codigo FROM SAPNU_PUAS.Factura, SAPNU_PUAS.Viaje
 			        WHERE Factura_nro = @nroFact
 			          AND Factura_Cliente = Viaje_Cliente
+                                  AND Viaje_Fecha_Hora_Inicio BETWEEN Factura_Fecha_Inicio AND Factura_Fecha_Fin
+				  AND Viaje_Fecha_Hora_Fin BETWEEN Factura_Fecha_Inicio AND Factura_Fecha_Fin
 			
 				COMMIT TRANSACTION T1
 
