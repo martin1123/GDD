@@ -719,3 +719,161 @@ ON F.Factura_Cliente = C.Cliente_Telefono
  order by sum(F.Factura_Importe) desc
 
  GO
+
+-- ========================================================
+-- Author:		
+-- Create date: 11/05/2017
+-- Description:	SP que realiza el alta de un chofer. Si no tiene usuario,
+--              se le crea uno. Caso contrario, se le asigna a su usuario
+--              el rol de chofer.
+-- ========================================================
+CREATE PROCEDURE [SAPNU_PUAS].[sp_chofer_alta] 
+	@nombre varchar(255), 
+	@apellido varchar(255), 
+	@dni numeric(18,0), 
+	@mail varchar(50), 
+	@telefono numeric(18,0), 
+	@direccion varchar(255), 
+	@fechaNacimiento datetime, 
+	@activo tinyint,
+	@codOp int out,
+	@resultado varchar(255) out
+AS
+BEGIN
+
+	SET @codOp = 0;
+	declare @idPersona int
+	
+	--Chequeo si el chofer a dar de alta ya fue dado de alta como persona
+	SELECT @idPersona = Persona_Id
+	FROM SAPNU_PUAS.Persona P
+	WHERE P.Persona_Telefono = @telefono;
+
+	--Si no tiene persona, creo el usuario y la persona con su usuario asociado. Luego, creo el chofer con su persona
+	--Caso contrario, creo el chofer y le asigno su persona
+	IF (isnull(@idPersona,0) = 0)
+		BEGIN
+			BEGIN TRY
+				INSERT INTO SAPNU_PUAS.Usuario (Usuario_Username,Usuario_Password,Usuario_Reintentos,Usuario_Activo) values (@telefono,HASHBYTES('SHA2_256',CAST(@telefono AS varchar)),0,1);
+				INSERT INTO SAPNU_PUAS.Persona (Persona_Telefono,Persona_Username) values (@telefono,@telefono);
+				INSERT INTO SAPNU_PUAS.Chofer (Chofer_Activo,Chofer_Apellido,Chofer_Direccion,Chofer_Dni,Chofer_Fecha_Nac,Chofer_Mail,Chofer_Nombre,Chofer_Persona,Chofer_Telefono) values (@activo,@apellido,@direccion,@dni,@fechaNacimiento,@mail,@nombre,@@IDENTITY,@telefono);
+			END TRY
+			BEGIN CATCH
+				SET @codOp = 1;
+
+				IF(@codOp <> 0)
+					SET @resultado = 'Ocurrio un error al tratar de crear el usuario asociado al chofer';
+			END CATCH
+		END
+	ELSE
+		BEGIN TRY
+			INSERT INTO SAPNU_PUAS.Chofer (Chofer_Activo,Chofer_Apellido,Chofer_Direccion,Chofer_Dni,Chofer_Fecha_Nac,Chofer_Mail,Chofer_Nombre,Chofer_Persona,Chofer_Telefono) values (@activo,@apellido,@direccion,@dni,@fechaNacimiento,@mail,@nombre,@idPersona,@telefono);
+		END TRY
+		BEGIN CATCH
+			SET @codOp = 1;
+
+			IF(@codOp <> 0)
+				SET @resultado = 'Ocurrio un error al tratar dar de alta el chofer';
+		END CATCH
+
+	--Busco el usuario del chofer y le asigno el rol de chofer
+	declare @usernameChofer varchar(50)
+
+	BEGIN TRY
+		SELECT @usernameChofer = Persona_Username
+		FROM SAPNU_PUAS.Persona P
+		WHERE P.Persona_Telefono = @telefono;
+
+		INSERT INTO SAPNU_PUAS.Rol_x_Usuario (Usuario_Username,Rol_Codigo) values (@usernameChofer,(SELECT Rol_Codigo FROM Rol where Rol_Nombre = 'Chofer'));
+	END TRY
+	BEGIN CATCH
+		SET @codOp = 1;
+
+		IF(@codOp <> 0)
+			SET @resultado = 'Ocurrio un error al tratar de asignar los permisos de chofer a su usuario';
+	END CATCH
+
+	IF (@codOp = 0)
+		SET @resultado = 'Chofer creado correctamente';
+
+END
+
+-- ========================================================
+-- Author:		
+-- Create date: 11/05/2017
+-- Description:	SP que realiza el alta de un cliente. Si no tiene usuario,
+--              se le crea uno. Caso contrario, se le asigna a su usuario
+--              el rol de Cliente.
+-- ========================================================
+CREATE PROCEDURE [SAPNU_PUAS].[sp_cliente_alta] 
+	@nombre varchar(255), 
+	@apellido varchar(255), 
+	@dni numeric(18,0), 
+	@mail varchar(50), 
+	@telefono numeric(18,0), 
+	@direccion varchar(255), 
+	@fechaNacimiento datetime, 
+	@codPostal numeric(4,0), 
+	@activo tinyint,
+	@codOp int out,
+	@resultado varchar(255) out
+AS
+BEGIN
+	
+	SET @codOp = 0;
+
+	declare @idPersona int
+	
+	--Chequeo si el cliente a dar de alta ya fue dado de alta como persona
+	SELECT @idPersona = Persona_Id
+	FROM SAPNU_PUAS.Persona P
+	WHERE P.Persona_Telefono = @telefono;
+
+	--Si no tiene persona, creo el usuario y la persona con su usuario asociado. Luego, creo el cliente con su persona
+	--Caso contrario, creo el cliente y le asigno su persona
+	IF (isnull(@idPersona,0) = 0)
+		BEGIN
+			BEGIN TRY
+				INSERT INTO SAPNU_PUAS.Usuario (Usuario_Username,Usuario_Password,Usuario_Reintentos,Usuario_Activo) values (@telefono,HASHBYTES('SHA2_256',CAST(@telefono AS varchar)),0,1);
+				INSERT INTO SAPNU_PUAS.Persona (Persona_Telefono,Persona_Username) values (@telefono,@telefono);
+				INSERT INTO SAPNU_PUAS.Cliente (Cliente_Activo,Cliente_Apellido,Cliente_Direccion,Cliente_Dni,Cliente_Fecha_Nac,Cliente_Mail,Cliente_Nombre,Cliente_Persona,Cliente_Telefono,Cliente_Codigo_Postal) values (@activo,@apellido,@direccion,@dni,@fechaNacimiento,@mail,@nombre,@@IDENTITY,@telefono,@codPostal);
+			END TRY
+			BEGIN CATCH
+				SET @codOp = 1;
+
+				IF(@codOp <> 0)
+					SET @resultado = 'Ocurrio un error al tratar de crear el usuario asociado al Cliente';
+			END CATCH
+		END
+	ELSE
+		BEGIN TRY
+			INSERT INTO SAPNU_PUAS.Cliente (Cliente_Activo,Cliente_Apellido,Cliente_Direccion,Cliente_Dni,Cliente_Fecha_Nac,Cliente_Mail,Cliente_Nombre,Cliente_Persona,Cliente_Telefono,Cliente_Codigo_Postal) values (@activo,@apellido,@direccion,@dni,@fechaNacimiento,@mail,@nombre,@idPersona,@telefono,@codPostal);
+		END TRY
+		BEGIN CATCH
+			SET @codOp = 1;
+
+			IF(@codOp <> 0)
+				SET @resultado = 'Ocurrio un error al tratar dar de alta el Cliente';
+		END CATCH
+
+	--Busco el usuario del Cliente y le asigno el rol de Cliente
+	declare @usernameCliente varchar(50)
+
+	BEGIN TRY
+		SELECT @usernameCliente = Persona_Username
+		FROM SAPNU_PUAS.Persona P
+		WHERE P.Persona_Telefono = @telefono;
+
+		INSERT INTO SAPNU_PUAS.Rol_x_Usuario (Usuario_Username,Rol_Codigo) values (@usernameCliente,(SELECT Rol_Codigo FROM Rol where Rol_Nombre = 'Cliente'));
+	END TRY
+	BEGIN CATCH
+		SET @codOp = 1;
+
+		IF(@codOp <> 0)
+			SET @resultado = 'Ocurrio un error al tratar de asignar los permisos de Cliente a su usuario';
+	END CATCH
+
+	IF (@codOp = 0)
+		SET @resultado = 'Cliente creado correctamente';
+
+END
