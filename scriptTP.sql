@@ -563,7 +563,7 @@ END;
 GO
 
 --Store Procedure de facturacion de clientes
-CREATE PROCEDURE SAPNU_PUAS.sp_fact_cliente 
+CREATE PROCEDURE [SAPNU_PUAS].[sp_fact_cliente] 
 
 	 @fecha_ini datetime, 
 	 @fecha_fin datetime,
@@ -578,8 +578,11 @@ BEGIN
 
 
 	DECLARE 
-	@importe numeric(18,0),
-	@importe_turno numeric(18,0)
+	@importe numeric(18,2),
+	@precio_base numeric(18,2),
+	@cant_km numeric(18,0),
+	@valor_km numeric(18,2),
+	@nroFact int
     
 	SET NOCOUNT ON;
 
@@ -608,46 +611,67 @@ BEGIN
 
 			--SE DECLARA CURSOR QUE RECUPERA EL IMPORTE TOTAL POR CADA TURNO
 			DECLARE IMPORTES_TURNO_CURSOR CURSOR FOR
-			SELECT SUM(B.Turno_Precio_Base)+SUM(A.Viaje_Cant_Kilometros)*b.Turno_Valor_Kilometro as IMPORTE_TURNO
+			SELECT SUM(B.Turno_Precio_Base),SUM(A.Viaje_Cant_Kilometros),b.Turno_Valor_Kilometro
 			  FROM SAPNU_PUAS.Viaje A, SAPNU_PUAS.Turno B
-            		 WHERE A.Viaje_Cliente = @cliente
-               	           AND A.Viaje_Fecha_Hora_Inicio BETWEEN @fecha_ini AND @fecha_fin
-                           AND A.Viaje_Fecha_Hora_Fin    BETWEEN @fecha_ini AND @fecha_fin
-                           AND B.Turno_Codigo = A.Viaje_Turno
-                         GROUP BY A.Viaje_Turno, b.Turno_Valor_Kilometro;
+             WHERE A.Viaje_Cliente = @cliente
+               AND A.Viaje_Fecha_Hora_Inicio BETWEEN @fecha_ini AND @fecha_fin
+               AND A.Viaje_Fecha_Hora_Fin    BETWEEN @fecha_ini AND @fecha_fin
+               AND B.Turno_Codigo = A.Viaje_Turno
+             GROUP BY A.Viaje_Turno, b.Turno_Valor_Kilometro;
 
 			OPEN IMPORTES_TURNO_CURSOR;
 
 			SET @importe = 0;
-			FETCH NEXT FROM IMPORTES_TURNO_CURSOR INTO @importe_turno
+			FETCH NEXT FROM IMPORTES_TURNO_CURSOR INTO @precio_base, @cant_km, @valor_km
 			
 			--SUMA LOS IMPORTES DE CADA TURNO EN LA VARIABLE @IMPORTE
 			WHILE @@FETCH_STATUS = 0  
 			BEGIN  
-				SET @importe = (@importe  + @importe_turno);
-				FETCH NEXT FROM IMPORTES_TURNO_CURSOR INTO @importe_turno
+				SET @importe = (@importe  + (@precio_base + (@cant_km * @valor_km)));
+				FETCH NEXT FROM IMPORTES_TURNO_CURSOR INTO @precio_base, @cant_km, @valor_km
 			END;
 
 			CLOSE IMPORTES_TURNO_CURSOR  ;
 			DEALLOCATE IMPORTES_TURNO_CURSOR  ;
 
 			BEGIN TRY
-					
-				SET @codOp = 0;
+				
+				BEGIN TRANSACTION T1
 
-				INSERT INTO SAPNU_PUAS.Factura
-				VALUES (@fecha_ini,@fecha_fin,@importe,SYSDATETIME(),@cliente);
+				    SET @nroFact = 0;
+				    	
+			        SET @codOp = 0;
+			        /*Se inserta la factura del mes para el cliente ingresado por parametros*/
+			        INSERT INTO SAPNU_PUAS.Factura
+			        VALUES (@fecha_ini,@fecha_fin,@importe,SYSDATETIME(),@cliente);
+			        
+			        SET @nroFact = @@IDENTITY;
+				    
+				    /*Si se inserto existosamente la factura, se va a insertar en la tabla VIAJE_X_FACTURA
+			          la relacion entre la factura y los viajes que facturados en la misma.*/
+			        INSERT INTO SAPNU_PUAS.Viaje_x_Factura
+			        SELECT Factura_Nro, Viaje_Codigo FROM SAPNU_PUAS.Factura, SAPNU_PUAS.Viaje
+			        WHERE Factura_nro = @nroFact
+			          AND Factura_Cliente = Viaje_Cliente
+			
+				COMMIT TRANSACTION T1
 
 			END TRY
-	
+			
 			BEGIN CATCH
+				/*Si hubo algun error se deshacen todos los cambios en las tablas*/
+				ROLLBACK TRANSACTION T1;
 
 				SET @codOp = @@ERROR;
-				SET @resultado = 'Ocurrio un error al registrar la facturacion en la tabla de facturas.';
-
+				
+				IF(@nroFact = 0)
+					SET @resultado = 'Ocurrio un error al registrar la facturacion en la tabla de facturas.';
+				ELSE
+					SET @resultado = 'Ocurrio un error al registrar los viajes de la factura en la tabla FACTURA_X_VIAJE.';
+				
 			END CATCH
-	
-		END
+			    
+		END;
 END;
 GO
 
