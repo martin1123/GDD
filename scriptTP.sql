@@ -172,7 +172,11 @@ BEGIN
 
 	SET NOCOUNT ON;
 	
-    SET @validHora = SAPNU_PUAS.is_available_hour_range(@horaInicio,@horaFin,@codigo);
+	/*Se valida la hora únicamente si se va a modificar un turno que va a estar activo*/
+	IF(@activo = 1)
+		SET @validHora = SAPNU_PUAS.is_available_hour_range(@horaInicio,@horaFin,@codigo);
+	ELSE
+		SET @validHora = 0;
 
 	--Se valida que no haya ningun turno con el que se superpongan los horarios
 	IF(@validHora = 0)
