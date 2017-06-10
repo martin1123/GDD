@@ -5,36 +5,48 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 
--- =======================================================================
--- Author:		Martin Maccio
--- Create date: 25/05/2017
--- Description:	Trigger que verifica que no se de de alta mas de un viaje
---              en el mismo momento para un mismo cliente.
--- =======================================================================
-CREATE TRIGGER T_VIAJE_CLIENTE ON SAPNU_PUAS.VIAJE INSTEAD OF INSERT
-AS 
+/*Funcion que verifica que los horarios ingresados por parametro esten incluidos dentro del turno ingresado*/
+CREATE FUNCTION [SAPNU_PUAS].[match_turn_hour]
+(
+	@turno int,
+	@iniHour int,
+	@endHour int
+)
+RETURNS int
+AS
 BEGIN
-	--SE CORROBORA QUE EL VIAJE A INSERTAR NO SE HAYA REALIZADO EN UN MOMENTO EN EL CUAL EL CLIENTE REALIZO OTRO VIAJE
-	--TAMBIEN SE CORROBORA QUE LA HORA DE INICIO Y DE FIN DEL VIAJE ESTEN INCLUIDAS DENTRO DEL TURNO CORRESPONDIENTE.
-	IF(EXISTS(SELECT * 
-				 FROM INSERTED A, SAPNU_PUAS.VIAJE B, SAPNU_PUAS.TURNO C
-			    WHERE A.Viaje_Cliente = B.Viaje_Cliente
-				  AND A.Viaje_Turno = C.Turno_Codigo
-			      AND ((SELECT DATEPART(HOUR, A.Viaje_Fecha_Hora_Inicio)) NOT BETWEEN C.Turno_Hora_Inicio AND C.Turno_Hora_Fin
-					   OR (SELECT DATEPART(HOUR, A.Viaje_Fecha_Hora_Fin)) NOT BETWEEN C.Turno_Hora_Inicio AND C.Turno_Hora_Fin
-					   OR A.Viaje_Fecha_Hora_Inicio BETWEEN B.Viaje_Fecha_Hora_Inicio AND B.Viaje_Fecha_Hora_Fin
-					   OR A.Viaje_Fecha_Hora_Fin BETWEEN B.Viaje_Fecha_Hora_Inicio AND B.Viaje_Fecha_Hora_Fin)))
+	
+	DECLARE @Result  int,
+			@horaini int,
+			@horaFin int;
+
+	SELECT @horaini = Turno_Hora_Inicio, @horaFin = Turno_Hora_Fin
+				FROM SAPNU_PUAS.turno
+		 WHERE Turno_Activo = 1
+	   AND Turno_Codigo = @turno;
+	
+	IF(@horaini <> NULL AND @horaFin <> NULL)
+
 	BEGIN
-	--SE RECHAZA VIAJE
-		PRINT('Las horas de inicio y fin a insertar no son válidas. Corroborar que el inicio y fin del viaje sea dentro del mismo turno, y que para un mismo cliente no exista mas de un viaje en el mismo momento.');
-		ROLLBACK;
+
+		IF(@iniHour >= @horaini AND @iniHour < @horaFin AND @endHour > @horaini AND @endHour <= @horaFin)
+		BEGIN
+			SET @Result = 1;
+		END
+		ELSE
+		BEGIN
+			SET @Result = 0;
+		END;
+
 	END
+
 	ELSE
 	BEGIN
-	--SI SE REALIZA VIAJE EN UNA FRANJA HORARIA DISPONIBLE SE REALIZA EL ALTA DEL VIAJE
-		INSERT INTO SAPNU_PUAS.Viaje (VIAJE_CANT_KILOMETROS,VIAJE_FECHA_HORA_INICIO,VIAJE_FECHA_HORA_FIN,VIAJE_CHOFER,VIAJE_AUTO,VIAJE_TURNO,VIAJE_CLIENTE) 
-		SELECT VIAJE_CANT_KILOMETROS, VIAJE_FECHA_HORA_INICIO, VIAJE_FECHA_HORA_FIN, VIAJE_CHOFER, VIAJE_AUTO, VIAJE_TURNO, VIAJE_CLIENTE FROM INSERTED;
+		SET @Result = 0;
 	END;
+
+	RETURN @Result;
+
 END;
 
 GO
@@ -350,9 +362,10 @@ END;
 
 GO
 
+/*Funcion que verifica la existencia de un chofer activo recibiendo su numero de telefono por parametro.*/
 CREATE FUNCTION [SAPNU_PUAS].[exist_chofer]
 (
-	@DNI numeric(18)
+	@TEL numeric(18)
 )
 RETURNS int
 AS
@@ -360,7 +373,8 @@ BEGIN
 	
 	RETURN (SELECT COUNT(*) 
 			 FROM SAPNU_PUAS.Chofer
-		   WHERE Chofer_Dni = @DNI);
+		   WHERE Chofer_Activo = 1
+		     AND Chofer_Telefono = @TEL);
 
 END;
 
@@ -376,7 +390,8 @@ BEGIN
 	
 	RETURN (SELECT COUNT(*) 
 			 FROM SAPNU_PUAS.Turno
-		   WHERE Turno_Codigo = @TURNO);
+		   WHERE Turno_Activo = 1 
+			 AND Turno_Codigo = @TURNO);
 
 END;
 
@@ -414,11 +429,10 @@ BEGIN
 	SET NOCOUNT ON;
 	SET @codOp = 0;
 	--Verifica que el viaje se realice dentro del mismo día
-	IF((SELECT DATEPART(DAY, @viaje_hora_ini)) <> (SELECT DATEPART(DAY, @viaje_hora_fin)))
+	IF((DATEPART(DAY, @viaje_hora_ini)) <> (DATEPART(DAY, @viaje_hora_fin)) OR (DATEPART(MONTH, @viaje_hora_ini)) <> (DATEPART(MONTH, @viaje_hora_fin)) OR (DATEPART(YEAR, @viaje_hora_ini)) <> (DATEPART(YEAR, @viaje_hora_fin)))
 	BEGIN
 		SET @codOp = 1;
 		SET @resultado = 'La hora de inicio y fin del viaje deben corresponder al mismo día.';
-
 	END
 	ELSE IF(SAPNU_PUAS.exist_car(@viaje_auto) = 0)
 	BEGIN
@@ -439,10 +453,31 @@ BEGIN
 	BEGIN
 		SET @codOp = 5;
 		SET @resultado = 'El cliente ingresado no se encuentra registrado';
+	END
+	/*EN REVISION
+	ELSE IF(SAPNU_PUAS.match_turn_hour(DATEPART(HOUR, @viaje_hora_ini),DATEPART(HOUR, @viaje_hora_fin),@viaje_turno) = 0)
+	BEGIN
+		SET @codOp = 6;
+		SET @resultado = 'Los horarios ingresados no corresponden al turno elegido';
+	END*/
+	/*Se verifica que no exista registrado un viaje en la misma fecha y hora*/
+	ELSE IF(EXISTS(SELECT * 
+			 FROM SAPNU_PUAS.VIAJE A
+			WHERE A.Viaje_Cliente = @viaje_cliente
+		      AND (     (A.Viaje_Fecha_Hora_Inicio <= @viaje_hora_ini AND @viaje_hora_ini < A.Viaje_Fecha_Hora_Fin)
+					 OR (A.Viaje_Fecha_Hora_Inicio < @viaje_hora_fin AND @viaje_hora_fin <= A.Viaje_Fecha_Hora_Fin)
+				  )
+				  )
+		   )
+
+	BEGIN
+		SET @codOp = 7;
+		SET @resultado = 'Ya se registro un viaje realizado dentro del rango horario ingresado';
 	END;
 
 	IF (@codOp = 0)
 	BEGIN
+
 		BEGIN TRY
 			INSERT INTO SAPNU_PUAS.Viaje 
 			VALUES (@viaje_cant_km,@viaje_hora_ini,@viaje_hora_fin,@viaje_chofer,@viaje_auto,@viaje_turno,@viaje_cliente);
